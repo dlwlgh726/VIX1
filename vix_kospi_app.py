@@ -3,49 +3,47 @@ import pandas as pd
 import numpy as np
 
 st.set_page_config(page_title="VIX 기반 KOSPI 전략 분석", layout="wide")
-st.title("📈 주식시장의 변동성을 활용한 VIX 기반 투자 전략 분석")
+st.title("📈 주식시장의 변동성을 활용한 VIX 기반 KOSPI 투자 전략 분석")
 
-# 1. GitHub 원본 CSV 주소 입력
-st.subheader("🔗 GitHub에서 CSV 데이터 불러오기")
-vix_url = st.text_input("VIX 파일 주소", "https://raw.githubusercontent.com/사용자명/저장소명/main/CBOE%20Volatility%20Index%20과거%20데이터.csv")
-kospi_url = st.text_input("KOSPI 파일 주소", "https://raw.githubusercontent.com/사용자명/저장소명/main/코스피지수%20과거%20데이터%20(1).csv")
+# ✅ 1. 파일 불러오기 함수
+@st.cache_data
+def load_data():
+    vix = pd.read_csv("CBOE Volatility Index 과거 데이터.csv", encoding="cp949")
+    kospi = pd.read_csv("코스피지수 과거 데이터 (1).csv", encoding="cp949")
 
-# 2. 전략 조건 설정
-threshold = st.slider("💡 KOSPI 보유 조건: VIX가 이 값보다 낮을 때 매수", 10, 30, 15)
+    vix["날짜"] = pd.to_datetime(vix["날짜"])
+    kospi["날짜"] = pd.to_datetime(kospi["날짜"])
+    kospi["종가"] = kospi["종가"].str.replace(",", "").astype(float)
 
-if vix_url and kospi_url:
-    try:
-        # 데이터 불러오기
-        vix = pd.read_csv(vix_url, encoding="cp949")
-        kospi = pd.read_csv(kospi_url, encoding="cp949")
+    vix = vix.set_index("날짜").sort_index()
+    kospi = kospi.set_index("날짜").sort_index()
 
-        # 날짜 처리
-        vix["날짜"] = pd.to_datetime(vix["날짜"])
-        kospi["날짜"] = pd.to_datetime(kospi["날짜"])
-        kospi["종가"] = kospi["종가"].str.replace(",", "").astype(float)
+    df = kospi.join(vix, how="inner", lsuffix="_KOSPI", rsuffix="_VIX")
+    return df
 
-        # 병합
-        vix = vix.set_index("날짜").sort_index()
-        kospi = kospi.set_index("날짜").sort_index()
-        df = kospi.join(vix, how="inner", lsuffix="_KOSPI", rsuffix="_VIX")
+# ✅ 2. 전략 파라미터
+threshold = st.slider("💡 VIX가 이 값보다 낮을 때 KOSPI를 보유", 10, 30, 15)
 
-        # 전략 적용
-        df["Signal"] = (df["종가_VIX"] < threshold).astype(int).shift(1)
-        df["Return"] = df["종가_KOSPI"].pct_change()
-        df["Strategy"] = df["Signal"] * df["Return"]
-        df["누적수익률_보유"] = (1 + df["Return"]).cumprod()
-        df["누적수익률_VIX전략"] = (1 + df["Strategy"]).cumprod()
+# ✅ 3. 데이터 불러오기 및 전략 계산
+try:
+    df = load_data()
 
-        # 결과 출력
-        st.subheader("📊 누적 수익률 비교")
-        st.line_chart(df[["누적수익률_보유", "누적수익률_VIX전략"]])
+    df["Signal"] = (df["종가_VIX"] < threshold).astype(int).shift(1)
+    df["Return"] = df["종가_KOSPI"].pct_change()
+    df["Strategy"] = df["Signal"] * df["Return"]
+    df["누적수익률_보유"] = (1 + df["Return"]).cumprod()
+    df["누적수익률_전략"] = (1 + df["Strategy"]).cumprod()
 
-        final = df[["누적수익률_보유", "누적수익률_VIX전략"]].dropna().iloc[-1]
-        st.success(f"✅ 단순 보유 전략 수익률: **{final[0]:.2f}배**")
-        st.success(f"✅ VIX 전략 수익률: **{final[1]:.2f}배**")
+    # ✅ 4. 시각화
+    st.subheader("📊 누적 수익률 비교")
+    st.line_chart(df[["누적수익률_보유", "누적수익률_전략"]])
 
-        with st.expander("📄 데이터 테이블 보기"):
-            st.dataframe(df[["종가_KOSPI", "종가_VIX", "Signal", "Return", "Strategy"]].dropna())
+    final = df[["누적수익률_보유", "누적수익률_전략"]].dropna().iloc[-1]
+    st.success(f"✅ 단순 보유 수익률: **{final[0]:.2f}배**")
+    st.success(f"✅ VIX 전략 수익률: **{final[1]:.2f}배**")
 
-    except Exception as e:
-        st.error(f"❌ 데이터 로딩 또는 분석 중 오류 발생: {e}")
+    with st.expander("📄 분석 데이터 보기"):
+        st.dataframe(df[["종가_KOSPI", "종가_VIX", "Signal", "Return", "Strategy"]].dropna())
+
+except Exception as e:
+    st.error(f"❌ 분석 중 오류 발생: {e}")
