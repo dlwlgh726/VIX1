@@ -2,6 +2,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+
+# ✅ 한글 폰트 설정
+font_path = "NanumGothic-Regular.ttf"
+fm.fontManager.addfont(font_path)
+plt.rc("font", family="NanumGothic")
+plt.rcParams["axes.unicode_minus"] = False
 
 st.set_page_config(page_title="VIX 기반 KOSPI 전략 분석", layout="wide")
 st.title("📈 주식시장의 변동성을 활용한 VIX 기반 KOSPI 투자 전략 분석")
